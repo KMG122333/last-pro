@@ -1,0 +1,243 @@
+#include <iostream>
+#include <string>
+#include <iomanip>
+#include <map>
+#include <cmath>
+#include <algorithm>
+#include <limits>
+#include <sstream>
+#include <stdexcept>
+
+using namespace std;
+
+// 차량 정보 구조체
+struct CarInfo {
+    string name;
+    double tankCapacity;       // 유류탱크 용량 (리터)
+    double fuelEfficiency;    // 리터당 연비 (km/L)
+};
+
+// <유종, 가격> 맵의 별칭
+using FuelPriceMap = map<string, double>;
+
+// **새로 추가된 데이터: 이미지 파일의 2025년 12월 1일 ~ 7일 일별 평균 가격**
+// 키: "YYMMDD" (문자열), 값: <유종, 가격> 맵
+map<string, FuelPriceMap> dailyFuelPrices = {
+    {"251201", {{"고급휘발유", 1966.40}, {"보통휘발유", 1746.84}, {"자동차용경유", 1663.32}, {"실내등유", 1333.73}}},
+    {"251202", {{"고급휘발유", 1965.94}, {"보통휘발유", 1746.74}, {"자동차용경유", 1662.98}, {"실내등유", 1334.27}}},
+    {"251203", {{"고급휘발유", 1965.92}, {"보통휘발유", 1746.78}, {"자동차용경유", 1662.72}, {"실내등유", 1334.83}}},
+    {"251204", {{"고급휘발유", 1965.54}, {"보통휘발유", 1746.76}, {"자동차용경유", 1662.58}, {"실내등유", 1334.91}}},
+    {"251205", {{"고급휘발유", 1965.42}, {"보통휘발유", 1746.70}, {"자동차용경유", 1662.34}, {"실내등유", 1335.60}}},
+    {"251206", {{"고급휘발유", 1964.14}, {"보통휘발유", 1746.35}, {"자동차용경유", 1661.60}, {"실내등유", 1335.41}}},
+    {"251207", {{"고급휘발유", 1964.35}, {"보통휘발유", 1746.35}, {"자동차용경유", 1661.36}, {"실내등유", 1335.66}}}
+};
+
+// 주유소별 할인율 (100분율로 저장, 예: 10% 할인은 0.10) - 브랜드는 할인에만 사용됨
+map<string, double> gasStationDiscounts = {
+    {"SK", 0.10},   // 10% 할인
+    {"GS", 0.05},   // 5% 할인
+    {"S-OIL", 0.15}, // 15% 할인
+    {"HD", 0.0},
+    {"알뜰", 0.0}
+};
+
+// 주요 차량 정보
+map<string, CarInfo> presetCars = {
+    {"아반떼", {"아반떼", 55.0, 18.0}}, {"소나타", {"소나타", 58.0, 17.0}}, {"그랜저", {"그랜저", 60.0, 16.0}}, 
+    {"G80", {"G80", 65.0, 15.0}}, {"GV80", {"GV80", 75.0, 12.0}}, {"A4", {"A4", 62.0, 15.0}},
+    {"A6", {"A6", 68.0, 16.0}}, {"eclass", {"E-Class", 65.0, 14.0}}, {"sclass", {"S-Class", 70.0, 10.0}},
+    {"520", {"520", 68.0, 12.0}}, {"530", {"530", 70.0, 11.0}}
+};
+
+// 전역 변수
+double currentFuel = 0.0;
+double lastPricePerLiter = 0.0;
+string lastFuelType = "없음";
+string lastGasStation = "없음";
+string REFUEL_DATE = ""; // main에서 입력받도록 변경
+
+// 주유 할인 비용 계산 함수
+double calculateDiscountedCost(double totalCost, const string& gasStation) {
+    double discountRate = 0.0;
+    if (gasStationDiscounts.count(gasStation)) {
+        discountRate = gasStationDiscounts.at(gasStation);
+    }
+    double discountedCost = totalCost * (1.0 - discountRate);
+    return round(discountedCost); // 반올림하여 정수 금액으로 계산
+}
+
+// 초기 주유 함수 (한 줄 입력)
+void initialRefuel(CarInfo& car) {
+    string fuelType;
+    string gasStation;
+    double refuelLiters;
+
+    cout << "\n> 초기 주유 정보 (유종 주유소 리터) 예: 고급휘발유 GS 20: ";
+    if (!(cin >> fuelType >> gasStation >> refuelLiters)) {
+        cout << "입력 오류 발생. 초기 주유를 건너뜁니다." << endl;
+        return;
+    }
+
+    double price = 0.0;
+    // **가격 조회 로직 변경: 주유소 대신 날짜별 평균 가격을 사용**
+    if (dailyFuelPrices.count(REFUEL_DATE) && dailyFuelPrices.at(REFUEL_DATE).count(fuelType)) {
+        price = dailyFuelPrices.at(REFUEL_DATE).at(fuelType);
+    } else {
+        cout << "경고: 유효하지 않은 날짜 또는 유종 정보입니다. 251207 보통휘발유(1746.35원)로 설정합니다." << endl;
+        price = 1746.35;
+        fuelType = "보통휘발유";
+        // gasStation은 할인율 계산에만 사용
+    }
+
+    lastPricePerLiter = price;
+    lastFuelType = fuelType;
+    lastGasStation = gasStation;
+
+    double totalCost = refuelLiters * price;
+    double discountedCost = calculateDiscountedCost(totalCost, gasStation);
+    double discountRate = gasStationDiscounts.count(gasStation) ? gasStationDiscounts.at(gasStation) : 0.0;
+
+    cout << "\n" << REFUEL_DATE.substr(0, 2) << "년 12월 " << REFUEL_DATE.substr(4, 2) << "일 [" << lastFuelType << "]를 리터당 [" << lastPricePerLiter << "]원(일별 평균 가격)에 주유하셨군요." << endl;
+    cout << refuelLiters << "리터 총 " << totalCost << "원, " << (discountRate * 100) << "% 할인 후 **" << discountedCost << "**원을 주유하셨습니다." << endl;
+    
+    currentFuel = min(car.tankCapacity, refuelLiters);
+    cout << "현재 잔여 연료량은 " << currentFuel << "리터입니다." << endl;
+}
+
+// 주행 함수 (한 줄 입력)
+char drive(CarInfo& car) {
+    double drivenKm;
+    char choice;
+
+    cout << "\n> 주행/추가 주유 결정 (km Y/N) 예: 160 Y : ";
+    if (!(cin >> drivenKm >> choice)) {
+        cout << "입력 오류 발생. 시뮬레이션을 종료합니다." << endl;
+        return 'N';
+    }
+
+    double litersUsed = drivenKm / car.fuelEfficiency;
+    double newCurrentFuel = max(0.0, currentFuel - litersUsed);
+    
+    cout << "그럼 리터당 " << car.fuelEfficiency << "km 연비로 " << drivenKm << "km를 주행하셔서 " << litersUsed << "리터를 사용 후," << endl;
+    cout << newCurrentFuel << "리터만큼 남아있겠네요." << endl;
+    
+    currentFuel = newCurrentFuel;
+    return toupper(choice);
+}
+
+// 추가 주유 함수 (한 줄 입력)
+void additionalRefuel(CarInfo& car) {
+    string fuelType;
+    string amountStr; // '가득' 또는 금액 문자열
+
+    cout << "\n> 추가 주유 (유종 가득/금액) 예: 보통휘발유 50000 : ";
+    if (!(cin >> fuelType >> amountStr)) {
+        cout << "입력 오류 발생. 추가 주유를 건너뜁니다." << endl;
+        return;
+    }
+
+    double price = 0.0;
+    // **가격 조회 로직 변경: 주유소 대신 날짜별 평균 가격을 사용**
+    if (dailyFuelPrices.count(REFUEL_DATE) && dailyFuelPrices.at(REFUEL_DATE).count(fuelType)) {
+        price = dailyFuelPrices.at(REFUEL_DATE).at(fuelType);
+    } else {
+        cout << "경고: 유종 정보가 유효하지 않습니다. 보통휘발유 가격으로 설정합니다." << endl;
+        if (dailyFuelPrices.count(REFUEL_DATE) && dailyFuelPrices.at(REFUEL_DATE).count("보통휘발유")) {
+            price = dailyFuelPrices.at(REFUEL_DATE).at("보통휘발유");
+            fuelType = "보통휘발유";
+        } else {
+            cout << "치명적 오류: 날짜 또는 유종 가격을 찾을 수 없습니다. 주유를 건너뜁니다." << endl;
+            return;
+        }
+    }
+    
+    lastPricePerLiter = price;
+    lastFuelType = fuelType;
+
+    double refuelAmount = 0.0;
+    double discountRate = gasStationDiscounts.count(lastGasStation) ? gasStationDiscounts.at(lastGasStation) : 0.0;
+
+    if (amountStr == "가득") {
+        double neededLiters = car.tankCapacity - currentFuel;
+        refuelAmount = neededLiters;
+        double totalCost = refuelAmount * price;
+        double discountedCost = calculateDiscountedCost(totalCost, lastGasStation);
+
+        cout << "가득-> 유류탱크 총 용량 " << car.tankCapacity << "L 중 " << currentFuel << "L 만큼 남아있어 " << refuelAmount << "L 만큼 주유하겠습니다." << endl;
+        cout << "총 금액은 " << totalCost << "원, " << (discountRate * 100) << "% 할인 후 **" << discountedCost << "**원입니다." << endl;
+        currentFuel = car.tankCapacity;
+    } else {
+        // 금액으로 주유
+        try {
+            double money = stod(amountStr);
+            
+            // 할인 적용 리터 계산: 리터 = 금액 / (리터당 가격 * (1 - 할인율))
+            double discountedPricePerLiter = price * (1.0 - discountRate);
+            double liters = money / discountedPricePerLiter;
+            
+            double maxLiters = car.tankCapacity - currentFuel;
+            if (liters > maxLiters) {
+                refuelAmount = maxLiters;
+                // 실제 주유된 금액 = 주유 리터 * 할인된 리터당 가격
+                double actualCost = refuelAmount * discountedPricePerLiter; 
+                cout << "주의: [" << money << "]원으로는 " << liters << "L 주유 가능하지만, 탱크 용량 초과로 **" << actualCost << "**원, " << refuelAmount << "L만 주유됩니다." << endl;
+            } else {
+                refuelAmount = liters;
+                cout << "[" << money << "]원 (" << (discountRate * 100) << "% 할인 적용 후) 만큼 주유하겠습니다. [" << REFUEL_DATE << "]기준 " << lastFuelType << " 평균 가격 " << lastPricePerLiter << "원으로 " << refuelAmount << "리터만큼 주유됩니다." << endl;
+            }
+            
+            currentFuel += refuelAmount;
+
+        } catch (const std::invalid_argument& e) {
+            cout << "경고: 잘못된 입력 값입니다. 주유를 건너뜁니다." << endl;
+            return;
+        }
+    }
+
+    cout << "추가 주유 후 현재 잔여 연료량은 " << currentFuel << "리터입니다." << endl;
+}
+
+int main() {
+    cout << fixed << setprecision(2);
+    string carNameInput;
+    CarInfo currentCar;
+
+    cout << "🚘 주유 및 연비 시뮬레이션 시스템 시작" << endl;
+    
+    // 주유일 입력 받기
+    cout << "> 주유 기준 날짜를 입력해 주세요 (YYMMDD 형식, 예: 251207): ";
+    cin >> REFUEL_DATE;
+    
+    cout << "> 당신의 차는 무엇입니까? (예: G80): ";
+    cin >> carNameInput;
+
+    auto it = presetCars.find(carNameInput);
+    if (it != presetCars.end()) {
+        currentCar = it->second;
+    } else {
+        cout << "프리셋에 없는 차량입니다. '아반떼' (55.0L, 18.0km/L) 정보로 진행합니다." << endl;
+        currentCar = presetCars["아반떼"];
+    }
+
+    cout << "->[" << currentCar.name << "]이군요. 유류탱크 용량은 " << currentCar.tankCapacity << "리터입니다." << endl;
+
+    // 1. 초기 주유
+    initialRefuel(currentCar);
+
+    char choice;
+    do {
+        // 2. 주행 및 추가 주유 결정
+        choice = drive(currentCar);
+        
+        if (choice == 'Y') {
+            // 3. 추가 주유
+            additionalRefuel(currentCar);
+        }
+    } while (choice == 'Y');
+
+    cout << "\n--- 시스템 유지 ---" << endl;
+    cout << "최종 잔여 연료량은 " << currentFuel << "리터입니다." << endl;
+    cout << "시뮬레이션을 종료합니다." << endl;
+
+    return 0;
+}

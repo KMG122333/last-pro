@@ -1,0 +1,213 @@
+#include <iostream>
+#include <string>
+#include <iomanip>
+#include <map>
+#include <cmath>
+#include <algorithm>
+#include <numeric>
+#include <sstream>
+
+using namespace std;
+
+// 연봉계산법: 일급 * 261일 (이미지 cca352.png 참조)
+const int WORK_DAYS_PER_YEAR = 261;
+
+// **데이터 1: 직무별 일평균 임금 (2022년~2024년)** - image_cca352.png
+map<string, map<int, double>> dailyWages = {
+    {"IT 기획자", {{2022, 419656}, {2023, 481654}, {2024, 562993}}},
+    {"IT 컨설턴트", {{2022, 476007}, {2023, 476404}, {2024, 471166}}},
+    {"업무분석가", {{2022, 544972}, {2023, 532956}, {2024, 436765}}},
+    {"데이터분석가", {{2022, 347476}, {2023, 380190}, {2024, 376271}}},
+    {"IT PM", {{2022, 463265}, {2023, 456225}, {2024, 443955}}},
+    {"IT아키텍트", {{2022, 518084}, {2023, 534135}, {2024, 492609}}},
+    {"UI/UX 기획/개발자", {{2022, 291414}, {2023, 315898}, {2024, 326566}}},
+    {"UI/UX디자이너", {{2022, 217843}, {2023, 224150}, {2024, 251272}}},
+    {"응용SW개발자", {{2022, 311962}, {2023, 341064}, {2024, 337061}}},
+    {"시스템SW개발자", {{2022, 247590}, {2023, 278819}, {2024, 296070}}},
+    {"정보시스템운영자", {{2022, 326653}, {2023, 435608}, {2024, 492943}}},
+    {"IT지원기술자", {{2022, 190219}, {2023, 215203}, {2024, 245535}}},
+    {"IT마케터", {{2022, 378726}, {2023, 483647}, {2024, 536729}}},
+    {"IT품질관리자", {{2022, 402626}, {2023, 442826}, {2024, 470490}}},
+    {"IT테스터", {{2022, 208959}, {2023, 189146}, {2024, 173328}}},
+    {"IT감리", {{2022, 456540}, {2023, 485624}, {2024, 502494}}},
+    {"정보보안전문가", {{2022, 362961}, {2023, 454136}, {2024, 478500}}}
+};
+
+// **데이터 2: 세금 및 보험료율** - image_cca337.png
+map<string, double> deductionRates = {
+    {"국민연금", 0.0450}, 
+    {"건강보험", 0.0355},
+    {"장기요양보험", 0.1295},
+    {"고용보험", 0.0090},
+    {"소득세", 0.02}
+};
+
+// **데이터 3: 저축 등급 기준** - image_cca31b.png
+map<string, long long> savingGrades = {
+    {"S", 200000000}, // 2억
+    {"A", 100000000}, // 1억
+    {"B", 50000000},  // 5천만
+    {"C", 30000000},  // 3천만
+    {"D", 20000000},  // 2천만
+    {"E", 10000000}   // 1천만
+};
+
+// --- 함수 정의 ---
+long long calculateAnnualSalary(double dailyWage) {
+    return static_cast<long long>(round(dailyWage * WORK_DAYS_PER_YEAR));
+}
+
+map<string, long long> calculateDeductions(long long annualSalary) {
+    map<string, long long> deductions;
+    
+    for (const auto& pair : deductionRates) {
+        if (pair.first == "장기요양보험") continue;
+        long long deduction = static_cast<long long>(annualSalary * pair.second);
+        deductions[pair.first] = deduction;
+    }
+
+    long long healthInsurance = deductions["건강보험"];
+    double ltcRate = deductionRates["장기요양보험"];
+    long long ltcDeduction = static_cast<long long>(healthInsurance * ltcRate);
+    deductions["장기요양보험"] = ltcDeduction;
+
+    return deductions;
+}
+
+string getSavingGrade(long long totalSavings) {
+    if (totalSavings < 0) {
+        return "F등급 (음수)";
+    }
+    
+    for (const auto& pair : savingGrades) {
+        if (totalSavings >= pair.second) {
+            return pair.first + "등급";
+        }
+    }
+    
+    return "F등급 (1천만 미만)";
+}
+
+/**
+ * 사용자 입력을 받아 세금/보험료를 계산하고 결과를 출력하는 메인 로직
+ */
+int main() {
+    cout << fixed << setprecision(0);
+
+    // --- 1. 사용자 입력 (직업) ---
+    string job2022, job2023, job2024;
+    cout << "--------------------------------------------------------" << endl;
+    cout << "              💰 3년간 연봉 및 저축 시뮬레이터          " << endl;
+    cout << "--------------------------------------------------------" << endl;
+
+    cout << "2022년 당신의 직업은 무엇입니까? (예: IT 기획자): ";
+    getline(cin, job2022);
+    cout << "2023년 당신의 직업은 무엇입니까? (예: IT 기획자): ";
+    getline(cin, job2023);
+    cout << "2024년 당신의 직업은 무엇입니까? (예: IT 기획자): ";
+    getline(cin, job2024);
+
+    // **[수정됨] A/B 등급 질문 삭제:** 해당 질문은 저축 등급 계산에 사용되지 않으므로 삭제합니다.
+    cout << "\n-> 근무 등급(A/B) 입력은 건너뛰고, 직업에 따른 연봉을 기준으로 저축 등급을 자동 계산합니다." << endl;
+    
+    // 소비액 입력
+    long long spending2022, spending2023, spending2024;
+    cout << "\n2022년에는 얼마를 소비하였습니까? (단위: 원): ";
+    cin >> spending2022;
+    cout << "2023년에는 얼마를 소비하였습니까? (단위: 원): ";
+    cin >> spending2023;
+    cout << "2024년에는 얼마를 소비하였습니까? (단위: 원): ";
+    cin >> spending2024;
+    
+    // 추가 저축 여부 입력
+    string hasExtraSavingStr;
+    cout << "추가 저축이 있습니까? (네/아니오): ";
+    cin >> hasExtraSavingStr;
+    transform(hasExtraSavingStr.begin(), hasExtraSavingStr.end(), hasExtraSavingStr.begin(), ::tolower);
+    long long extraSaving = 0;
+    if (hasExtraSavingStr == "네") {
+        cout << "추가 저축액을 입력해 주세요 (3년간 총액): ";
+        cin >> extraSaving;
+    }
+    
+
+    // --- 2. 급여 및 세금/보험료 계산 ---
+    
+    long long salary2022 = (dailyWages.count(job2022) && dailyWages.at(job2022).count(2022)) ? 
+                           calculateAnnualSalary(dailyWages.at(job2022).at(2022)) : 0;
+    long long salary2023 = (dailyWages.count(job2023) && dailyWages.at(job2023).count(2023)) ? 
+                           calculateAnnualSalary(dailyWages.at(job2023).at(2023)) : 0;
+    long long salary2024 = (dailyWages.count(job2024) && dailyWages.at(job2024).count(2024)) ? 
+                           calculateAnnualSalary(dailyWages.at(job2024).at(2024)) : 0;
+
+    long long totalSalary = salary2022 + salary2023 + salary2024;
+    
+    map<string, long long> deductions2022 = calculateDeductions(salary2022);
+    map<string, long long> deductions2023 = calculateDeductions(salary2023);
+    map<string, long long> deductions2024 = calculateDeductions(salary2024);
+    
+    map<string, long long> totalDeductions;
+    long long totalDeductionAmount = 0;
+
+    for (const auto& rate : deductionRates) {
+        string key = rate.first;
+        if (key == "장기요양보험") {
+            long long ltcTotal = deductions2022["장기요양보험"] + deductions2023["장기요양보험"] + deductions2024["장기요양보험"];
+            totalDeductions["장기요양보험"] = ltcTotal;
+            totalDeductionAmount += ltcTotal;
+        } else {
+            long long total = deductions2022[key] + deductions2023[key] + deductions2024[key];
+            totalDeductions[key] = total;
+            totalDeductionAmount += total;
+        }
+    }
+    
+    long long totalNetIncome = totalSalary - totalDeductionAmount;
+    long long totalSpending = spending2022 + spending2023 + spending2024;
+    long long baseSavings = totalNetIncome - totalSpending;
+    long long totalSavings = baseSavings + extraSaving;
+    string finalGrade = getSavingGrade(totalSavings);
+
+
+    // --- 3. 결과 출력 ---
+    cout << "\n========================================================" << endl;
+    cout << "              📊 최종 시뮬레이션 결과 (3년)           " << endl;
+    cout << "========================================================" << endl;
+
+    // **[수정됨] A/B 등급 출력 제거**
+    cout << "3년간 총 보수액은 **" << totalSalary << "**원입니다." << endl;
+    cout << "당신의 직업에 따른 3년간 총 보수액은 **" << totalSalary << "**원입니다." << endl;
+
+    cout << "\n------------------- 공제 내역 (3년간 총액) ------------------" << endl;
+    cout << "국민연금 납부액은 총 **" << totalDeductions["국민연금"] << "**원입니다." << endl;
+    cout << "건강보험 납부액은 총 **" << totalDeductions["건강보험"] << "**원입니다." << endl;
+    cout << "장기요양보험 납부액은 총 **" << totalDeductions["장기요양보험"] << "**원입니다." << endl;
+    cout << "고용보험 납부액은 총 **" << totalDeductions["고용보험"] << "**원입니다." << endl;
+    long long totalNationalPension_10 = static_cast<long long>(totalSalary * 0.10);
+    cout << "국민연금 (10% 기준) 납부액은 총 **" << totalNationalPension_10 << "**원입니다." << endl;
+    cout << "소득세 납부액은 총 **" << totalDeductions["소득세"] << "**원입니다." << endl;
+    cout << "총 공제액: **" << totalDeductionAmount << "**원" << endl;
+
+    cout << "\n--------------------- 실수령액 및 소비 ---------------------" << endl;
+    cout << "3년간 실수령 총액 A는 **" << totalNetIncome << "**원, 연평균 A/3은 **" << totalNetIncome / 3 << "**원입니다." << endl;
+    
+    cout << "\n소비 내역:" << endl;
+    cout << "  2022년 소비: " << spending2022 << "원" << endl;
+    cout << "  2023년 소비: " << spending2023 << "원" << endl;
+    cout << "  2024년 소비: " << spending2024 << "원" << endl;
+    cout << "3년간 총 소비액 B는 **" << totalSpending << "**원, 연평균 B/3은 **" << totalSpending / 3 << "**원입니다." << endl;
+
+    cout << "\n------------------------- 저축 결과 -------------------------" << endl;
+    cout << "총 저축액 (A-B)는 **" << baseSavings << "**원, 연평균 (A-B)/3은 **" << baseSavings / 3 << "**원입니다." << endl;
+
+    if (hasExtraSavingStr == "네") {
+        cout << "추가 저축(총 " << extraSaving << "원)을 포함한 저축총액은 **" << totalSavings << "**원, 연평균은 **" << totalSavings / 3 << "**원입니다." << endl;
+    } else {
+        cout << "추가 저축(없음)을 포함한 저축총액은 **" << totalSavings << "**원, 연평균은 **" << totalSavings / 3 << "**원입니다." << endl;
+    }
+
+    cout << "\n**당신의 저축등급은 [ " << finalGrade << " ] 입니다!**" << endl;
+    cout << "========================================================" << endl;
+
+    return 0;
+}
